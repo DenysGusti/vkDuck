@@ -53,6 +53,24 @@ Editor::Editor(
     // Initialize global ModelManager pointer
     g_modelManager = &modelManager;
 
+    // Set up model reload callback to notify source nodes when their models change
+    g_modelManager->setReloadCallback([this](ModelHandle handle) {
+        if (!graph) return;
+
+        // Find all MultiModelSourceNode instances that reference this model
+        for (const auto& nodePtr : graph->nodes) {
+            if (auto* source = dynamic_cast<MultiModelSourceNode*>(nodePtr.get())) {
+                for (const auto& entry : source->getModels()) {
+                    if (entry.handle == handle) {
+                        Log::info("Editor", "Model reloaded - rebuilding source node '{}'", source->name);
+                        source->rebuildConsolidatedData();
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
     // Set up Asset Library callback to add models to multi-model source nodes
     AssetLibraryUI::setModelSelectedCallback([this](ModelHandle handle) {
         if (!g_modelManager->isLoaded(handle)) {

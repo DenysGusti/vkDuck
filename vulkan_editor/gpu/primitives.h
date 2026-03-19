@@ -718,7 +718,7 @@ enum class StoreState { Empty, Created, Linked };
 struct Store {
     std::array<Array, 1000> arrays;
     std::array<VertexData, 1000> vertexDatas;
-    std::array<UniformBuffer, 1000> uniformBuffers;
+    std::array<UniformBuffer, 2000> uniformBuffers;
     std::array<Camera, 10> cameras;
     std::array<Light, 10> lights;
     std::array<DescriptorPool, 5> descriptorPools;

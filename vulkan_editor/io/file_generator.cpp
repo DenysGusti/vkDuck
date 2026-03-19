@@ -389,6 +389,30 @@ void FileGenerator::generateSDKLinks(const std::filesystem::path& projectRoot) {
             Log::warning("FileGenerator", "Failed to copy VMA packagefiles: {}", e.what());
         }
     }
+
+    // === Link/copy data folder for model textures ===
+    // Model textures are loaded relative to the GLTF file, so the data/models
+    // folder needs to be accessible from the generated project
+    fs::path srcDataModels = editorRoot / "data" / "models";
+    fs::path dstDataModels = projectRoot / "data" / "models";
+    if (fs::exists(srcDataModels)) {
+        try {
+            fs::create_directories(dstDataModels.parent_path());
+            if (fs::exists(dstDataModels, ec) || fs::is_symlink(dstDataModels)) {
+                fs::remove_all(dstDataModels, ec);
+            }
+            fs::create_directory_symlink(srcDataModels, dstDataModels);
+            Log::info("FileGenerator", "Linked data/models directory");
+        } catch (const fs::filesystem_error& e) {
+            // Symlink failed, copy instead (Windows without admin)
+            try {
+                fs::copy(srcDataModels, dstDataModels, fs::copy_options::recursive);
+                Log::info("FileGenerator", "Copied data/models directory");
+            } catch (const fs::filesystem_error& copyErr) {
+                Log::warning("FileGenerator", "Failed to link/copy data/models: {}", copyErr.what());
+            }
+        }
+    }
 }
 
 void FileGenerator::generatePrimitives(
@@ -415,7 +439,9 @@ void FileGenerator::generatePrimitives(
         }
     }
 
-    // === COPY ORIGINAL IMAGE FILES (for wuffs loading) ===
+    // === HANDLE IMAGE FILES FOR CODE GENERATION ===
+    // Model textures stay relative to their GLTF file (in data/models/)
+    // Standalone images get copied to data/images/
     std::filesystem::path imagesDir = outputDir.parent_path() / "data" / "images";
     std::filesystem::create_directories(imagesDir);
 
@@ -423,10 +449,32 @@ void FileGenerator::generatePrimitives(
         if (img.name.empty()) continue;
         if (img.isSwapchainImage) continue;
 
-        // If we have an original image path, copy the file and set the path for code gen
+        // If we have an original image path, determine how to handle it
         if (!img.originalImagePath.empty()) {
             std::filesystem::path srcPath = img.originalImagePath;
-            if (std::filesystem::exists(srcPath)) {
+
+            // Check if this is a model texture (path contains data/models/)
+            // These textures should stay relative to the model file, not be copied
+            std::string pathStr = srcPath.generic_string();
+            bool isModelTexture = pathStr.find("data/models/") != std::string::npos ||
+                                  pathStr.find("data\\models\\") != std::string::npos;
+
+            if (isModelTexture) {
+                // Keep the path relative to project root (model textures stay with model)
+                // Find the "data/models" part and make it relative
+                size_t dataPos = pathStr.find("data/models/");
+                if (dataPos == std::string::npos) {
+                    dataPos = pathStr.find("data\\models\\");
+                }
+                if (dataPos != std::string::npos) {
+                    std::string relativePath = pathStr.substr(dataPos);
+                    // Normalize to forward slashes
+                    std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
+                    img.originalImagePath = relativePath;
+                    Log::info("FileGenerator", "Model texture path: {}", img.originalImagePath.string());
+                }
+            } else if (std::filesystem::exists(srcPath)) {
+                // Standalone image - copy to data/images/
                 std::string imageFileName = srcPath.filename().string();
                 std::filesystem::path destPath = imagesDir / imageFileName;
                 try {

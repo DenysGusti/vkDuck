@@ -1118,7 +1118,10 @@ bool PipelineNode::updateShaderReflection(
     // Single light input - create if shader has light struct named
     // "lights" or "light"
     const StructInfo* mainLightStruct = nullptr;
+    Log::debug("Shader", "Detected {} light structs", shaderReflection.lightStructs.size());
     for (const auto& ls : shaderReflection.lightStructs) {
+        Log::debug("Shader", "  Light struct: '{}' type='{}' arraySize={}",
+            ls.instanceName, ls.structName, ls.arraySize);
         std::string nameLower = ls.instanceName;
         std::transform(
             nameLower.begin(), nameLower.end(), nameLower.begin(),
@@ -1166,18 +1169,33 @@ bool PipelineNode::updateShaderReflection(
         // The detected struct may be nested (e.g., Light inside LightsUBO),
         // so we need the top-level binding name for pin deduplication.
         lightInput.uniformName = lightStruct.instanceName;
+        Log::debug("Shader", "Looking for binding with Light type '{}' in {} bindings",
+            lightStruct.structName, shaderReflection.bindings.size());
         for (const auto& binding : shaderReflection.bindings) {
+            Log::debug("Shader", "  Binding: '{}' type='{}' members={}",
+                binding.resourceName, binding.typeName, binding.members.size());
             // Direct match: binding type IS the light struct
             if (binding.typeName == lightStruct.structName) {
                 lightInput.uniformName = binding.resourceName;
+                Log::debug("Shader", "    Direct match found!");
                 break;
             }
             // Indirect match: binding has a member of the light struct type
             bool found = false;
             for (const auto& member : binding.members) {
-                if (member.typeName == lightStruct.structName) {
+                Log::debug("Shader", "    Member: '{}' type='{}' arraySize={}",
+                    member.name, member.typeName, member.arraySize);
+                // Check for exact match or if member type ends with the struct name
+                // (handles module prefixes like "common.Light")
+                bool typeMatches = (member.typeName == lightStruct.structName) ||
+                    (member.typeName.size() > lightStruct.structName.size() &&
+                     member.typeName.ends_with(lightStruct.structName) &&
+                     member.typeName[member.typeName.size() - lightStruct.structName.size() - 1] == '.');
+                if (typeMatches) {
                     lightInput.uniformName = binding.resourceName;
                     lightInput.arraySize = member.arraySize;
+                    Log::debug("Shader", "    Indirect match found! arraySize={}",
+                        member.arraySize);
                     found = true;
                     break;
                 }
@@ -1241,7 +1259,26 @@ bool PipelineNode::updateShaderReflection(
     // This must happen after reconcilePins() updates the Pin objects
     reregisterPins(graph.pinRegistry);
 
-    // Light count is user-controlled - shader uses numLights header for dynamic sizing
+    // Update connected LightNode's shaderArraySize when shader is updated
+    if (hasLightInput && lightInput.arraySize > 0) {
+        for (const auto& link : graph.links) {
+            if (link.endPin == lightInput.pin.id) {
+                auto startResult = graph.findPin(link.startPin);
+                if (auto* lightNode = dynamic_cast<LightNode*>(startResult.node)) {
+                    if (lightNode->shaderArraySize != lightInput.arraySize) {
+                        Log::info(
+                            "Shader",
+                            "Updating LightNode shaderArraySize from {} to {}",
+                            lightNode->shaderArraySize, lightInput.arraySize
+                        );
+                        lightNode->shaderArraySize = lightInput.arraySize;
+                        lightNode->ensureLightCount();
+                    }
+                }
+                break;
+            }
+        }
+    }
 
     return true; // Shader compilation and reflection succeeded
 }

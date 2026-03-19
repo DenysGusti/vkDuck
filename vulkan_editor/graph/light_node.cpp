@@ -39,6 +39,7 @@ nlohmann::json LightNode::toJson() const {
 
     // Light parameters
     j["numLights"] = numLights;
+    j["shaderArraySize"] = shaderArraySize;
 
     // Serialize light data array
     nlohmann::json lightsJson = nlohmann::json::array();
@@ -75,7 +76,7 @@ void LightNode::fromJson(const nlohmann::json& j) {
 
     // Light parameters
     numLights = j.value("numLights", 1);
-    // shaderControlledCount is deprecated - light count is always user-controlled
+    shaderArraySize = j.value("shaderArraySize", 0);
 
     // Restore lights array
     lightsBuffer.lights.clear();
@@ -136,12 +137,19 @@ void LightNode::ensureLightCount() {
     // Ensure at least 1 light
     if (numLights < 1) numLights = 1;
 
-    // Resize if needed
-    if (static_cast<int>(lightsBuffer.lights.size()) != numLights) {
-        int oldSize = static_cast<int>(lightsBuffer.lights.size());
-        lightsBuffer.lights.resize(numLights);
+    // Buffer must hold enough lights for shader's expected array size
+    // (numLights can be less than shaderArraySize - shader uses numLights header)
+    int bufferLightCount = std::max(numLights, shaderArraySize);
 
-        // Initialize new lights in a circle
+    Log::debug("LightNode", "ensureLightCount: numLights={}, shaderArraySize={}, bufferLightCount={}",
+        numLights, shaderArraySize, bufferLightCount);
+
+    // Resize if needed
+    if (static_cast<int>(lightsBuffer.lights.size()) != bufferLightCount) {
+        int oldSize = static_cast<int>(lightsBuffer.lights.size());
+        lightsBuffer.lights.resize(bufferLightCount);
+
+        // Initialize new lights in a circle (for user's active lights)
         for (int i = oldSize; i < numLights; ++i) {
             float angle = (float)i / (float)numLights * 2.0f * std::numbers::pi_v<float>;
             float radius = 5.0f;
@@ -154,9 +162,15 @@ void LightNode::ensureLightCount() {
             lightsBuffer.lights[i].intensity = 1.0f;
         }
 
-        // Update GPU buffer
-        lightsBuffer.updateGpuBuffer();
+        // Zero-initialize any padding lights (beyond numLights but within shader array)
+        for (int i = std::max(oldSize, numLights); i < bufferLightCount; ++i) {
+            lightsBuffer.lights[i] = primitives::LightData{};
+        }
     }
+
+    // Update GPU buffer - header.numLights is set to actual count, not buffer size
+    lightsBuffer.header.numLights = numLights;
+    lightsBuffer.updateGpuBuffer();
 }
 
 void LightNode::render(
@@ -244,9 +258,12 @@ void LightNode::createPrimitives(primitives::Store& store) {
     // Point to our dynamic lights buffer (header + array)
     lightUbo->data = lightsBuffer.getSpan();
 
+    // Buffer light count = max of user lights and shader's expected array size
+    int bufferLightCount = static_cast<int>(lightsBuffer.lights.size());
+
     Log::debug(
-        "LightNode", "Holding {} lights in UBO of size {} bytes",
-        lightsBuffer.header.numLights,
+        "LightNode", "Holding {} active lights ({} in buffer) in UBO of size {} bytes",
+        numLights, bufferLightCount,
         lightUbo->data.size()
     );
 
@@ -255,11 +272,12 @@ void LightNode::createPrimitives(primitives::Store& store) {
     lightPrimitive = &store.lights[hLight.handle];
     lightPrimitive->name = name;  // Use node name for light
     lightPrimitive->ubo = hUbo;
-    lightPrimitive->numLights = numLights;
+    // Use buffer count for code generation (allocates correct buffer size)
+    lightPrimitive->numLights = bufferLightCount;
 
-    // Copy light data for code generation
-    lightPrimitive->lights.resize(numLights);
-    for (int i = 0; i < numLights; ++i) {
+    // Copy all light data for code generation (including padding lights)
+    lightPrimitive->lights.resize(bufferLightCount);
+    for (int i = 0; i < bufferLightCount; ++i) {
         lightPrimitive->lights[i].position = lightsBuffer.lights[i].position;
         lightPrimitive->lights[i].color = lightsBuffer.lights[i].color;
         lightPrimitive->lights[i].radius = lightsBuffer.lights[i].radius;
@@ -273,8 +291,8 @@ void LightNode::createPrimitives(primitives::Store& store) {
     array.handles = {hUbo.handle};
 
     Log::debug(
-        "LightNode", "Created light array UBO and Light primitive with {} lights",
-        lightsBuffer.header.numLights
+        "LightNode", "Created light array UBO and Light primitive with {} lights (buffer size for {})",
+        numLights, bufferLightCount
     );
 }
 

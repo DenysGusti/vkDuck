@@ -295,7 +295,31 @@ void PipelineEditorUI::CreateNewLink(
     link.startPin = startId;
     link.endPin = endId;
     graph.addLink(link);
-    // Light count is user-controlled - shader uses numLights header for dynamic sizing
+
+    // Set shader array size when LightNode connects to Pipeline's light input
+    auto startResult = graph.findPin(startId);
+    auto endResult = graph.findPin(endId);
+
+    if (auto* lightNode = dynamic_cast<LightNode*>(startResult.node)) {
+        if (auto* pipeline = dynamic_cast<PipelineNode*>(endResult.node)) {
+            Log::debug("Node Editor",
+                "Checking light connection: hasLightInput={}, pinMatch={}, arraySize={}",
+                pipeline->hasLightInput,
+                pipeline->lightInput.pin.id == endId,
+                pipeline->lightInput.arraySize);
+            if (pipeline->hasLightInput &&
+                pipeline->lightInput.pin.id == endId &&
+                pipeline->lightInput.arraySize > 0) {
+                lightNode->shaderArraySize = pipeline->lightInput.arraySize;
+                lightNode->ensureLightCount();
+                Log::info(
+                    "Node Editor",
+                    "LightNode connected - shader expects {} lights",
+                    lightNode->shaderArraySize
+                );
+            }
+        }
+    }
 }
 
 void PipelineEditorUI::ShowIncompatiblePinsTooltip() {
@@ -356,6 +380,28 @@ void PipelineEditorUI::DeleteLinks() {
     ed::LinkId linkId = 0;
     while (ed::QueryDeletedLink(&linkId)) {
         if (ed::AcceptDeletedItem()) {
+            // Reset shaderArraySize when LightNode disconnects from pipeline
+            for (const auto& link : graph.links) {
+                if (link.id == linkId) {
+                    auto startResult = graph.findPin(link.startPin);
+                    auto endResult = graph.findPin(link.endPin);
+
+                    if (auto* lightNode = dynamic_cast<LightNode*>(startResult.node)) {
+                        if (auto* pipeline = dynamic_cast<PipelineNode*>(endResult.node)) {
+                            if (pipeline->hasLightInput &&
+                                pipeline->lightInput.pin.id == link.endPin) {
+                                lightNode->shaderArraySize = 0;
+                                lightNode->ensureLightCount();
+                                Log::info(
+                                    "Node Editor",
+                                    "LightNode disconnected - no shader size limit"
+                                );
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
             graph.removeLink(linkId);
         }
     }

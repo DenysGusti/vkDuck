@@ -49,7 +49,8 @@ public:
 
     // Light array configuration - user-controlled dynamic size
     primitives::LightsBuffer lightsBuffer;
-    int numLights{6};  // User-configurable count (no limit)
+    int numLights{6};  // User-configurable count
+    int shaderArraySize{0};  // Shader's expected array size (for buffer allocation)
 
     // Legacy pin (kept for backwards compatibility)
     Pin lightArrayPin;

@@ -4,10 +4,11 @@
 #include <ostream>
 #include <string>
 #include <functional>
+#include <filesystem>
 
 /// Convert a model file path to a valid C++ variable name for the loaded ModelData
-inline std::string modelPathToVarName(const std::string& path) {
-    return "loadedModel_" + std::to_string(std::hash<std::string>{}(path));
+inline std::string modelPathToVarName(const std::filesystem::path& path) {
+    return "loadedModel_" + std::to_string(std::hash<std::filesystem::path>{}(path));
 }
 
 /// Generates code for primitives using their assigned names.

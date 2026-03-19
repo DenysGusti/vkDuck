@@ -726,7 +726,7 @@ void Editor::showPipelineView() {
 
 void Editor::showLiveView() {
     const auto contentRegion = ImGui::GetContentRegionAvail();
-    liveView.render(contentRegion.x, contentRegion.y);
+    liveView.render(static_cast<uint32_t>(contentRegion.x), static_cast<uint32_t>(contentRegion.y));
 
     VkDescriptorSet imageDS = liveView.getImage();
     if (imageDS != VK_NULL_HANDLE) {

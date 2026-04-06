@@ -53,11 +53,17 @@ jobs:
 
       - name: Install Vulkan SDK (Windows)
         if: runner.os == 'Windows'
-        run: choco install vulkan-sdk
+        run: |
+          choco install vulkan-sdk
+
+          $vulkan_dir = (Get-ChildItem -Path C:\VulkanSDK -Directory)[0].FullName
+          Write-Host "Exporting VULKAN_SDK=$vulkan_dir"
+
+          echo "VULKAN_SDK=$vulkan_dir" >> $env:GITHUB_ENV
 
       - name: Configure CMake
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DVULKAN_SDK="C:/VulkanSDK"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
         shell: bash
 
       - name: Build Project

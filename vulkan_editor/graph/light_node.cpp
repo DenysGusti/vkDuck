@@ -41,9 +41,10 @@ nlohmann::json LightNode::toJson() const {
     j["numLights"] = numLights;
     j["shaderArraySize"] = shaderArraySize;
 
-    // Serialize light data array
+    // Serialize light data array - only active lights, not padding
     nlohmann::json lightsJson = nlohmann::json::array();
-    for (const auto& light : lightsBuffer.lights) {
+    for (int i = 0; i < numLights; ++i) {
+        const auto& light = lightsBuffer.lights[i];
         lightsJson.push_back(
             {{"position",
               {light.position.x, light.position.y, light.position.z}},

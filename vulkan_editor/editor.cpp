@@ -370,6 +370,8 @@ void Editor::start() {
 
     static bool showSaveAsPopup = false;
     static char newStateName[128] = "";
+    static bool showOverwriteConfirmPopup = false;
+    static std::filesystem::path pendingOverwritePath;
 
     this->update();
 
@@ -414,9 +416,9 @@ void Editor::start() {
                 } else {
                     for (const auto& state : states) {
                         if (ImGui::MenuItem(state.filename().string().c_str())) {
-                            pendingSavePositionSync = true;
-                            pendingSavePath =
+                            pendingOverwritePath =
                                 std::filesystem::path(shader_manager->getProjectRoot()) / state;
+                            showOverwriteConfirmPopup = true;
                         }
                     }
                 }
@@ -484,6 +486,34 @@ void Editor::start() {
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
             showSaveAsPopup = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    if (showOverwriteConfirmPopup) {
+        ImGui::OpenPopup("Confirm Overwrite");
+    }
+
+    if (ImGui::BeginPopupModal("Confirm Overwrite", &showOverwriteConfirmPopup, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Are you sure you want to overwrite");
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", pendingOverwritePath.filename().string().c_str());
+        ImGui::Text("?");
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::Button("Overwrite", ImVec2(120, 0))) {
+            pendingSavePositionSync = true;
+            pendingSavePath = pendingOverwritePath;
+            showOverwriteConfirmPopup = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            showOverwriteConfirmPopup = false;
+            pendingOverwritePath.clear();
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

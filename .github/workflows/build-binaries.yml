@@ -1,0 +1,112 @@
+name: Build Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os_name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os_name: Linux
+            runner: ubuntu-latest
+            artifact_name: vkDuck-linux
+          - os_name: Windows
+            runner: windows-latest
+            artifact_name: vkDuck-windows
+          - os_name: macOS
+            runner: macos-latest
+            artifact_name: vkDuck-macos
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Vulkan SDK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt update
+
+          sudo apt install -y build-essential cmake wget gnupg2 gcc-15 g++-15
+
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-15 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-15 100
+          sudo update-alternatives --install /usr/bin/cc cc /usr/bin/gcc 100
+          sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 100
+
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list https://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+
+          sudo apt update
+          sudo apt install -y vulkan-sdk
+
+      - name: Install Vulkan SDK (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install vulkan-headers vulkan-loader
+
+      - name: Install Vulkan SDK (Windows)
+        if: runner.os == 'Windows'
+        run: choco install vulkan-sdk
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+
+      - name: Build Project
+        run: cmake --build build --config Release -j 4
+
+      - name: Prepare Artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            cp build/vkDuckEditor.exe dist/
+            cp build/*.dll dist/
+          else
+            cp build/vkDuckEditor dist/
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/*
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Zip Artifacts for Release
+        run: |
+          cd artifacts
+          zip -r ../vkDuck-linux.zip vkDuck-linux
+          zip -r ../vkDuck-windows.zip vkDuck-windows
+          zip -r ../vkDuck-macos.zip vkDuck-macos
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            vkDuck-linux.zip
+            vkDuck-windows.zip
+            vkDuck-macos.zip
+          generate_release_notes: true

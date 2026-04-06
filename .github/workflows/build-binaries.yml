@@ -17,7 +17,7 @@ jobs:
             runner: ubuntu-latest
             artifact_name: vkDuck-linux
           - os_name: Windows
-            runner: windows-latest
+            runner: windows-2025-vs2026
             artifact_name: vkDuck-windows
           - os_name: macOS
             runner: macos-latest
@@ -49,7 +49,7 @@ jobs:
       - name: Install Vulkan SDK (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install vulkan-headers vulkan-loader
+          brew install vulkan-headers vulkan-loader vulkan-utility-libraries
 
       - name: Install Vulkan SDK (Windows)
         if: runner.os == 'Windows'

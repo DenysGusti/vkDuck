@@ -21,6 +21,21 @@
 
 namespace {
 constexpr float PADDING_X = 10.0f;
+
+// Sanitize a name for use as a C++ identifier
+// - Replace hyphens with underscores
+// - Prepend "shader_" if name starts with a digit (C++ identifiers can't start with numbers)
+std::string sanitizeShaderName(const std::string& name) {
+    std::string result = name;
+    std::replace(result.begin(), result.end(), '-', '_');
+
+    // C++ identifiers cannot start with a digit
+    if (!result.empty() && std::isdigit(static_cast<unsigned char>(result[0]))) {
+        result = "shader_" + result;
+    }
+
+    return result;
+}
 }
 
 static std::set<std::string> generatedGlobalTypes;
@@ -1494,7 +1509,7 @@ void PipelineNode::createPrimitives(primitives::Store& store) {
     primitives::StoreHandle hVertexShader = store.newShader();
     auto& vertexShader = store.shaders[hVertexShader.handle];
     vertexShader.name = std::format(
-        "{}_{}", settings.vertexShaderPath.stem().string(),
+        "{}_{}", sanitizeShaderName(settings.vertexShaderPath.stem().string()),
         hVertexShader.handle
     );
     vertexShader.code = shaderReflection.vertexCode;
@@ -1506,7 +1521,7 @@ void PipelineNode::createPrimitives(primitives::Store& store) {
     primitives::StoreHandle hFragmentShader = store.newShader();
     auto& fragmentShader = store.shaders[hFragmentShader.handle];
     fragmentShader.name = std::format(
-        "{}_{}", settings.fragmentShaderPath.stem().string(),
+        "{}_{}", sanitizeShaderName(settings.fragmentShaderPath.stem().string()),
         hFragmentShader.handle
     );
     fragmentShader.code = shaderReflection.fragmentCode;

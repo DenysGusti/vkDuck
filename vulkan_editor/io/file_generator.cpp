@@ -46,10 +46,19 @@ std::filesystem::path getEditorRoot() {
     return exePath.parent_path().parent_path();
 }
 
-// Sanitize a name for use as a C++ identifier (replace spaces with underscores, etc.)
+// Sanitize a name for use as a C++ identifier
+// - Replace spaces and hyphens with underscores
+// - Prepend "shader_" if name starts with a digit (C++ identifiers can't start with numbers)
 std::string sanitizeName(const std::string& name) {
     std::string result = name;
     std::replace(result.begin(), result.end(), ' ', '_');
+    std::replace(result.begin(), result.end(), '-', '_');
+
+    // C++ identifiers cannot start with a digit
+    if (!result.empty() && std::isdigit(static_cast<unsigned char>(result[0]))) {
+        result = "shader_" + result;
+    }
+
     return result;
 }
 

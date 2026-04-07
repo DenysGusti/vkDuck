@@ -76,7 +76,7 @@ jobs:
           if [ "$RUNNER_OS" == "Windows" ]; then
             cp build/vkDuckEditor.exe dist/
             cp build/*.dll dist/
-          else
+          elif [ "$RUNNER_OS" == "Linux" ]; then
             cp build/vkDuckEditor dist/
             find build -type f -name "*.so*" -exec cp {} dist/ \;
           elif [ "$RUNNER_OS" == "macOS" ]; then

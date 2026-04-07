@@ -78,6 +78,10 @@ jobs:
             cp build/*.dll dist/
           else
             cp build/vkDuckEditor dist/
+            find build -type f -name "*.so*" -exec cp {} dist/ \;
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            cp build/vkDuckEditor dist/
+            find build -type f -name "*.dylib" -exec cp {} dist/ \;
           fi
 
       - name: Upload Artifact

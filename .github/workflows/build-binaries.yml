@@ -78,10 +78,10 @@ jobs:
             cp build/*.dll dist/
           elif [ "$RUNNER_OS" == "Linux" ]; then
             cp build/vkDuckEditor dist/
-            find build -type f -name "*.so*" -exec cp {} dist/ \;
+            find build -name "*.so*" -exec cp -P {} dist/ \;
           elif [ "$RUNNER_OS" == "macOS" ]; then
             cp build/vkDuckEditor dist/
-            find build -type f -name "*.dylib" -exec cp {} dist/ \;
+            find build -name "*.dylib" -exec cp -P {} dist/ \;
           fi
 
       - name: Upload Artifact
@@ -108,9 +108,9 @@ jobs:
       - name: Zip Artifacts for Release
         run: |
           cd artifacts
-          zip -r ../vkDuck-linux.zip vkDuck-linux
+          zip -ry ../vkDuck-linux.zip vkDuck-linux
           zip -r ../vkDuck-windows.zip vkDuck-windows
-          zip -r ../vkDuck-macos.zip vkDuck-macos
+          zip -ry ../vkDuck-macos.zip vkDuck-macos
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
